@@ -4,6 +4,7 @@ import { deleteHapioBooking } from "../services/hapio/deleteBooking.js";
 import { createZoomMeeting } from "../services/zoom/createMeeting.js";
 import { deleteZoomMeeting } from "../services/zoom/deleteMeeting.js";
 import { getAvailableSlots } from "../services/hapio/getAvailableSlots.js";
+import { sendBookingConfirmation } from "../services/email/sendEmail.js";
 import { validateDateInput } from "../utils/validateDate.js";
 import { validateBookingInput } from "../utils/sanitizer.js";
 import { logger } from "../utils/logger.js";
@@ -30,7 +31,7 @@ router.post("/", async (req, res) => {
             });
         }
 
-        const { name, email, date } = inputValidation.sanitized;
+        const { name, email, date, timezone } = inputValidation.sanitized;
 
         // Validate date
         const dateValidation = validateDateInput(date);
@@ -41,7 +42,7 @@ router.post("/", async (req, res) => {
             });
         }
 
-        logger.info("Processing booking request", { name, email, date });
+        logger.info("Processing booking request", { name, email, date, timezone });
 
         // STEP 1: Create Hapio booking first (checks availability)
         try {
@@ -87,6 +88,36 @@ router.post("/", async (req, res) => {
             });
         }
 
+        // STEP 3: Send confirmation email (non-blocking)
+        const bookingData = {
+            id: hapioBooking.id,
+            starts_at: hapioBooking.starts_at,
+            ends_at: hapioBooking.ends_at,
+            meeting: {
+                id: zoomMeeting.id,
+                join_url: zoomMeeting.join_url,
+                start_url: zoomMeeting.start_url,
+                password: zoomMeeting.password
+            }
+        };
+
+        // Send email asynchronously (don't wait for it)
+        sendBookingConfirmation(email, name, bookingData, timezone || 'UTC')
+            .then((emailResult) => {
+                logger.info("Confirmation email sent", {
+                    to: email,
+                    messageId: emailResult.messageId,
+                    previewUrl: emailResult.previewUrl
+                });
+            })
+            .catch((emailError) => {
+                logger.error("Failed to send confirmation email", {
+                    error: emailError.message,
+                    customerEmail: email
+                });
+                // Don't fail the booking if email fails
+            });
+
         // SUCCESS - Both bookings created
         logger.info("Booking completed successfully", {
             hapioId: hapioBooking.id,
@@ -110,7 +141,7 @@ router.post("/", async (req, res) => {
                     start_time: zoomMeeting.start_time
                 }
             },
-            message: "Booking created successfully"
+            message: "Booking created successfully. Confirmation email sent!"
         });
 
     } catch (error) {

@@ -34,6 +34,24 @@ export function isValidEmail(email) {
 }
 
 /**
+ * Validate timezone string
+ * @param {string} timezone - IANA timezone identifier
+ * @returns {boolean} - True if valid timezone
+ */
+export function isValidTimezone(timezone) {
+    if (typeof timezone !== 'string') {
+        return false;
+    }
+    
+    try {
+        Intl.DateTimeFormat(undefined, { timeZone: timezone });
+        return true;
+    } catch (err) {
+        return false;
+    }
+}
+
+/**
  * Validate and sanitize booking input
  * @param {Object} data - Booking data
  * @returns {Object} - Validation result
@@ -62,6 +80,11 @@ export function validateBookingInput(data) {
         errors.push("Date is required");
     }
     
+    // Validate timezone (optional)
+    if (data.timezone && !isValidTimezone(data.timezone)) {
+        errors.push("Invalid timezone");
+    }
+    
     if (errors.length > 0) {
         return {
             valid: false,
@@ -74,7 +97,8 @@ export function validateBookingInput(data) {
         sanitized: {
             name: sanitizeString(data.name, 100),
             email: data.email.toLowerCase().trim(),
-            date: data.date
+            date: data.date,
+            timezone: data.timezone || 'UTC'
         }
     };
 }

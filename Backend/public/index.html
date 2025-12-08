@@ -45,7 +45,7 @@
             margin-bottom: 8px;
         }
         
-        input {
+        input, select {
             width: 100%;
             padding: 12px;
             margin-top: 5px;
@@ -55,7 +55,7 @@
             transition: border-color 0.3s;
         }
         
-        input:focus {
+        input:focus, select:focus {
             outline: none;
             border-color: #667eea;
         }
@@ -170,6 +170,13 @@
             margin-top: 5px;
         }
         
+        .timezone-select-group {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+        
         .loading {
             display: none;
             text-align: center;
@@ -213,6 +220,16 @@
             font-size: 48px;
             margin-bottom: 10px;
         }
+
+        .calendar-note {
+            background: #fff9e6;
+            border-left: 4px solid #ffc107;
+            padding: 12px;
+            margin-top: 15px;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #856404;
+        }
     </style>
 </head>
 <body>
@@ -224,6 +241,12 @@
         <div class="timezone-info">
             🌍 Times shown in your timezone
             <div class="timezone-badge" id="userTimezone"></div>
+            <div class="timezone-select-group">
+                <label for="timezoneSelect" style="margin: 10px 0 5px 0; font-size: 12px;">Change timezone:</label>
+                <select id="timezoneSelect" style="padding: 8px; font-size: 13px;">
+                    <!-- Populated by JavaScript -->
+                </select>
+            </div>
         </div>
 
         <form id="bookingForm">
@@ -254,6 +277,10 @@
             </div>
             <input type="hidden" id="selectedTimeUTC">
 
+            <div class="calendar-note">
+                📧 You'll receive a confirmation email with a calendar invite (.ics file) that you can add to Google Calendar, Outlook, Apple Calendar, or any other calendar app!
+            </div>
+
             <button type="submit" id="submitBtn">Book Consultation</button>
         </form>
 
@@ -266,13 +293,65 @@
     </div>
 
     <script>
-        const NY_TIMEZONE = 'America/New_York';
-        const USER_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
-        const BUSINESS_START_HOUR = 9;
-        const BUSINESS_END_HOUR = 17;
-        const SLOT_INTERVAL_MINUTES = 30;
+        // Popular timezones list
+        const popularTimezones = [
+            { value: 'America/New_York', label: 'Eastern Time (ET)' },
+            { value: 'America/Chicago', label: 'Central Time (CT)' },
+            { value: 'America/Denver', label: 'Mountain Time (MT)' },
+            { value: 'America/Los_Angeles', label: 'Pacific Time (PT)' },
+            { value: 'America/Phoenix', label: 'Arizona' },
+            { value: 'America/Anchorage', label: 'Alaska' },
+            { value: 'Pacific/Honolulu', label: 'Hawaii' },
+            { value: 'Europe/London', label: 'London (GMT)' },
+            { value: 'Europe/Paris', label: 'Paris (CET)' },
+            { value: 'Europe/Berlin', label: 'Berlin (CET)' },
+            { value: 'Europe/Moscow', label: 'Moscow' },
+            { value: 'Asia/Dubai', label: 'Dubai' },
+            { value: 'Asia/Kolkata', label: 'India' },
+            { value: 'Asia/Singapore', label: 'Singapore' },
+            { value: 'Asia/Tokyo', label: 'Tokyo' },
+            { value: 'Australia/Sydney', label: 'Sydney' },
+            { value: 'Pacific/Auckland', label: 'Auckland' }
+        ];
+
+        let USER_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+        // Initialize timezone selector
+        function initTimezoneSelector() {
+            const select = document.getElementById('timezoneSelect');
+            
+            // Add current timezone as first option
+            const currentOption = document.createElement('option');
+            currentOption.value = USER_TIMEZONE;
+            currentOption.textContent = `${USER_TIMEZONE} (Current)`;
+            currentOption.selected = true;
+            select.appendChild(currentOption);
+            
+            // Add popular timezones
+            popularTimezones.forEach(tz => {
+                if (tz.value !== USER_TIMEZONE) {
+                    const option = document.createElement('option');
+                    option.value = tz.value;
+                    option.textContent = tz.label;
+                    select.appendChild(option);
+                }
+            });
+            
+            // Handle timezone change
+            select.addEventListener('change', (e) => {
+                USER_TIMEZONE = e.target.value;
+                document.getElementById('userTimezone').textContent = USER_TIMEZONE;
+                
+                // Refresh slots if date is selected
+                const selectedDate = document.getElementById('date').value;
+                if (selectedDate) {
+                    displayTimeSlots();
+                }
+            });
+        }
 
         document.getElementById('userTimezone').textContent = USER_TIMEZONE;
+        initTimezoneSelector();
 
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('date').min = today;
@@ -320,7 +399,6 @@
                 return;
             }
             
-            // Show loading state
             slotsContainer.innerHTML = `
                 <div class="empty-state">
                     <div class="spinner"></div>
@@ -328,7 +406,6 @@
                 </div>
             `;
             
-            // Fetch real available slots from Hapio API
             const slots = await fetchAvailableSlotsFromAPI(selectedDate);
             
             if (slots.length === 0) {
@@ -397,7 +474,8 @@
                 name: fullName,
                 email: email,
                 phone: phone,
-                date: selectedTimeUTC
+                date: selectedTimeUTC,
+                timezone: USER_TIMEZONE
             };
 
             try {
@@ -427,18 +505,19 @@
                                timeZone: USER_TIMEZONE
                            })}
                         </p>
+                        <p><strong>Timezone:</strong> ${USER_TIMEZONE}</p>
                         <p><strong>🎥 Zoom Meeting:</strong><br>
                            <a href="${result.data.meeting.join_url}" target="_blank" style="word-break: break-all; color: #667eea;">${result.data.meeting.join_url}</a>
                         </p>
-                        <div style="margin-top: 20px; padding: 15px; background: #fff3cd; border-radius: 8px;">
-                           📧 Confirmation email sent to <strong>${email}</strong>
+                        <div style="margin-top: 20px; padding: 15px; background: #d4edda; border-radius: 8px; border: 1px solid #c3e6cb;">
+                           📧 <strong>Check your email!</strong><br>
+                           We've sent a confirmation with a calendar invite (.ics file) to <strong>${email}</strong>
                         </div>
                     `, "success");
                     
                     document.getElementById("bookingForm").reset();
                     document.getElementById('selectedTimeUTC').value = '';
                     
-                    // Refresh slots to show updated availability
                     const currentDate = document.getElementById('date').value;
                     if (currentDate) {
                         document.getElementById('date').value = currentDate;
