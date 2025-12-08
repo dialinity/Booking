@@ -1,0 +1,80 @@
+/**
+ * Sanitize and validate user inputs
+ */
+
+/**
+ * Sanitize string input by removing potentially harmful characters
+ * @param {string} input - String to sanitize
+ * @param {number} maxLength - Maximum allowed length
+ * @returns {string} - Sanitized string
+ */
+export function sanitizeString(input, maxLength = 255) {
+    if (typeof input !== 'string') {
+        return '';
+    }
+    
+    return input
+        .trim()
+        .slice(0, maxLength)
+        .replace(/[<>]/g, ''); // Remove angle brackets to prevent HTML injection
+}
+
+/**
+ * Validate email format
+ * @param {string} email - Email to validate
+ * @returns {boolean} - True if valid email format
+ */
+export function isValidEmail(email) {
+    if (typeof email !== 'string') {
+        return false;
+    }
+    
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email) && email.length <= 254;
+}
+
+/**
+ * Validate and sanitize booking input
+ * @param {Object} data - Booking data
+ * @returns {Object} - Validation result
+ */
+export function validateBookingInput(data) {
+    const errors = [];
+    
+    // Validate name
+    if (!data.name || typeof data.name !== 'string') {
+        errors.push("Name is required");
+    } else if (data.name.trim().length < 2) {
+        errors.push("Name must be at least 2 characters");
+    } else if (data.name.length > 100) {
+        errors.push("Name must be less than 100 characters");
+    }
+    
+    // Validate email
+    if (!data.email || typeof data.email !== 'string') {
+        errors.push("Email is required");
+    } else if (!isValidEmail(data.email)) {
+        errors.push("Invalid email format");
+    }
+    
+    // Validate date
+    if (!data.date || typeof data.date !== 'string') {
+        errors.push("Date is required");
+    }
+    
+    if (errors.length > 0) {
+        return {
+            valid: false,
+            errors
+        };
+    }
+    
+    return {
+        valid: true,
+        sanitized: {
+            name: sanitizeString(data.name, 100),
+            email: data.email.toLowerCase().trim(),
+            date: data.date
+        }
+    };
+}
